@@ -16,6 +16,12 @@
   <header class="app-header">
     <h1>Workout Calendar</h1>
     <div class="header-actions">
+      <select id="themeSelect" title="Theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="high-contrast">High Contrast</option>
+      </select>
+      <button id="settingsBtn" title="Settings">Settings</button>
       <button id="exportBtn" title="Export all data as JSON">Export</button>
       <label class="import-label" title="Import data from a JSON file">
         Import <input type="file" id="importInput" accept="application/json" />
@@ -40,7 +46,10 @@
     <section class="entry-panel" aria-labelledby="panelTitle">
       <div class="panel-head">
         <h2 id="panelTitle">Entries for <span id="selectedDateLabel"></span> <span id="dayTypeChip" class="chip"></span></h2>
-        <button id="addEntryBtn" class="primary">+ Add Entry</button>
+        <div class="right">
+          <span id="dayCalories" class="chip muted" title="Estimated calories for this day">0 kcal</span>
+          <button id="addEntryBtn" class="primary">+ Add Entry</button>
+        </div>
       </div>
 
       <div class="form-row">
@@ -59,6 +68,22 @@
         <div class="form-row">
           <label>Exercise
             <input id="exercise" type="text" required placeholder="e.g., Bench Press" />
+          </label>
+        </div>
+
+        <div class="form-row grid-3">
+          <label>Intensity
+            <select id="intensity">
+              <option value="6">Moderate (MET 6)</option>
+              <option value="8">Vigorous (MET 8)</option>
+              <option value="3.5">Light (MET 3.5)</option>
+            </select>
+          </label>
+          <label>Set time (sec)
+            <input id="setTime" type="number" min="10" step="5" value="45" />
+          </label>
+          <label>Rest time (sec)
+            <input id="restTime" type="number" min="0" step="5" value="90" />
           </label>
         </div>
 
@@ -98,6 +123,20 @@
   <footer class="app-footer">
     <p><strong>Tip:</strong> Log right after your working set. Consistency beats perfection. 💪</p>
   </footer>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" class="settings">
+      <h3>Settings</h3>
+      <label>Body weight (kg)
+        <input id="bodyWeight" type="number" min="30" max="250" step="0.5" value="80" />
+      </label>
+      <p class="muted small">Used for calorie estimates (kcal = MET × 3.5 × weight(kg) ÷ 200 × minutes).</p>
+      <div class="form-actions">
+        <button id="saveSettings" class="primary">Save</button>
+        <button id="closeSettings">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <script>
     if ('serviceWorker' in navigator) {

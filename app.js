@@ -1,4 +1,4 @@
-// Workout Calendar — PWA v2 (Day type + per-set rows)
+// Workout Calendar — PWA v3 (Themes + Calories + PR highlighting)
 (function(){
   const $ = (sel, root=document) => root.querySelector(sel);
 
@@ -24,6 +24,16 @@
   const historyQuery = $('#historyQuery');
   const historyRefreshBtn = $('#historyRefreshBtn');
   const historyList = $('#historyList');
+  const intensity = $('#intensity');
+  const setTime = $('#setTime');
+  const restTime = $('#restTime');
+  const settingsBtn = $('#settingsBtn');
+  const settingsDialog = $('#settingsDialog');
+  const bodyWeight = $('#bodyWeight');
+  const saveSettings = $('#saveSettings');
+  const closeSettings = $('#closeSettings');
+  const dayCaloriesEl = $('#dayCalories');
+  const themeSelect = $('#themeSelect');
 
   function uuid(){
     if (window.crypto && 'randomUUID' in window.crypto) return window.crypto.randomUUID();
@@ -76,51 +86,40 @@
     return d.toLocaleString(undefined, { month:'long', year:'numeric' });
   }
 
-  const KEY = 'workout_log_v2';
-  function loadAll(){
-    const v2 = localStorage.getItem(KEY);
-    if (v2) {
-      try { return JSON.parse(v2) || {}; } catch(e){ return {}; }
-    }
-    let migrated = {};
-    try {
-      const v1 = JSON.parse(localStorage.getItem('workout_log_v1') || '{}');
-      if (v1 && typeof v1 === 'object') {
-        Object.entries(v1).forEach(([date, val]) => {
-          if (Array.isArray(val)) {
-            migrated[date] = { dayType: null, entries: migrateEntriesArray(val) };
-          } else if (val && typeof val === 'object') {
-            migrated[date] = {
-              dayType: val.dayType || null,
-              entries: migrateEntriesArray(val.entries || [])
-            };
-          }
-        });
-        saveAll(migrated);
-      }
-    } catch(e){}
-    return migrated;
+  const KEY = 'workout_log_v3';
+  const PREFS = 'workout_prefs_v1';
+
+  function loadPrefs(){
+    try { return JSON.parse(localStorage.getItem(PREFS) || '{}'); } catch(e){ return {}; }
   }
-  function saveAll(data){ localStorage.setItem(KEY, JSON.stringify(data)); }
-  function migrateEntriesArray(arr){
-    return (arr || []).map(e => {
-      if (Array.isArray(e.sets)) return e;
-      const count = Math.max(1, Number(e.sets || 1));
-      const reps = Math.max(1, Number(e.reps || 1));
-      const weight = (e.weight === '' || e.weight == null) ? '' : Number(e.weight);
-      const sets = Array.from({length: count}, () => ({ reps, weight }));
-      const id = e.id || uuid();
-      return { id, exercise: e.exercise, sets, notes: e.notes || '', timestamp: e.timestamp || new Date().toISOString() };
-    });
+  function savePrefs(p){ localStorage.setItem(PREFS, JSON.stringify(p)); }
+
+  function applyTheme(){
+    const prefs = loadPrefs();
+    const theme = prefs.theme || 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+    themeSelect.value = theme;
+    if (prefs.bodyWeight) bodyWeight.value = prefs.bodyWeight;
   }
 
+  function loadAll(){
+    const v = localStorage.getItem(KEY);
+    if (v) { try { return JSON.parse(v)||{}; } catch(e){ return {}; } }
+    // migrate older keys
+    const v2 = localStorage.getItem('workout_log_v2');
+    if (v2) { try { const d = JSON.parse(v2)||{}; saveAll(d); return d; } catch(e){} }
+    const v1 = localStorage.getItem('workout_log_v1');
+    if (v1) { try { const d = JSON.parse(v1)||{}; saveAll(d); return d; } catch(e){} }
+    return {};
+  }
+  function saveAll(data){ localStorage.setItem(KEY, JSON.stringify(data)); }
   function getDayData(dateISO){
     const data = loadAll();
     let day = data[dateISO];
     if (!day) day = { dayType: null, entries: [] };
-    if (Array.isArray(day)) day = { dayType: null, entries: migrateEntriesArray(day) };
+    if (Array.isArray(day)) day = { dayType: null, entries: day };
     let mutated = false;
-    day.entries = (day.entries || []).map(e => {
+    day.entries = (day.entries||[]).map(e => {
       if (!e.id) { e.id = uuid(); mutated = true; }
       if (!Array.isArray(e.sets)) {
         const count = Math.max(1, Number(e.sets || 1));
@@ -129,35 +128,51 @@
         e.sets = Array.from({length: count}, () => ({ reps, weight }));
         mutated = true;
       }
+      if (!e.intensity) e.intensity = 6;
+      if (!e.setTime) e.setTime = 45;
+      if (!e.restTime) e.restTime = 90;
       return e;
     });
-    if (mutated) {
-      const all = loadAll();
-      all[dateISO] = day;
-      saveAll(all);
-    }
+    if (mutated){ const all = loadAll(); all[dateISO] = day; saveAll(all); }
     return day;
   }
-  function setDayData(dateISO, day){
-    const all = loadAll();
-    all[dateISO] = day;
-    saveAll(all);
-  }
+  function setDayData(dateISO, day){ const all = loadAll(); all[dateISO] = day; saveAll(all); }
   function getEntries(dateISO){ return getDayData(dateISO).entries; }
-  function setEntries(dateISO, entries){
-    const day = getDayData(dateISO);
-    day.entries = entries;
-    setDayData(dateISO, day);
-  }
+  function setEntries(dateISO, arr){ const d = getDayData(dateISO); d.entries = arr; setDayData(dateISO, d); }
   function getDayType(dateISO){ return getDayData(dateISO).dayType; }
-  function setDayType(dateISO, type){
-    const day = getDayData(dateISO);
-    day.dayType = type || null;
-    setDayData(dateISO, day);
+  function setDayType(dateISO, type){ const d = getDayData(dateISO); d.dayType = type||null; setDayData(dateISO, d); }
+  function hasEntries(dateISO){ const d = getDayData(dateISO); return Array.isArray(d.entries)&&d.entries.length>0; }
+
+  function epley1RM(weight, reps){
+    if (weight === '' || weight == null || reps == null) return null;
+    return Number(weight) * (1 + Number(reps)/30);
   }
-  function hasEntries(dateISO){
-    const d = getDayData(dateISO);
-    return Array.isArray(d.entries) && d.entries.length > 0;
+  function best1RMForExercise(name){
+    const data = loadAll();
+    let best = 0;
+    Object.values(data).forEach(day => {
+      const arr = (day && day.entries) ? day.entries : Array.isArray(day) ? day : [];
+      arr.forEach(e => {
+        if ((e.exercise||'').toLowerCase() === (name||'').toLowerCase()){
+          (e.sets||[]).forEach(s => {
+            const est = epley1RM(s.weight, s.reps);
+            if (est && est > best) best = est;
+          });
+        }
+      });
+    });
+    return best;
+  }
+  function estimateEntryCalories(entry){
+    const prefs = loadPrefs();
+    const weightKg = Number(prefs.bodyWeight || 80);
+    const minutes = ((Number(entry.setTime)||45) + (Number(entry.restTime)||90)) * (entry.sets?.length||1) / 60;
+    const MET = Number(entry.intensity || 6);
+    const kcal = MET * 3.5 * weightKg / 200 * minutes;
+    return Math.round(kcal);
+  }
+  function estimateDayCalories(dateISO){
+    return getEntries(dateISO).reduce((s,e)=> s + estimateEntryCalories(e), 0);
   }
 
   function renderCalendar(){
@@ -214,6 +229,7 @@
     renderEntries();
     entryForm.hidden = true;
     addEntryBtn.focus();
+    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
     const d = fromISO(iso);
     if(d.getMonth() !== view.getMonth() || d.getFullYear() !== view.getFullYear()){
       view = new Date(d.getFullYear(), d.getMonth(), 1);
@@ -237,6 +253,13 @@
   }
   setCount.addEventListener('input', () => buildSetRows(setCount.value));
 
+  function summarizeSets(sets){
+    if (!Array.isArray(sets) || sets.length === 0) return '';
+    const reps = sets.map(s => s.reps ?? '?').join('/');
+    const wts = sets.map(s => (s.weight===''||s.weight==null)?'–':s.weight).join('/');
+    return `${reps} reps @ ${wts} kg`;
+  }
+
   function renderEntries(){
     const entries = getEntries(selectedISO).map((e, i) => ({...e, __index: i}));
     entriesList.innerHTML = '';
@@ -259,13 +282,28 @@
 
       const title = document.createElement('div');
       title.className = 'entry-title';
+
+      const best = best1RMForExercise(e.exercise);
+      let isPR = false;
+      (e.sets||[]).forEach(s => {
+        const est = epley1RM(s.weight, s.reps);
+        if (est && est > best) isPR = true;
+      });
+
       const setSummary = summarizeSets(e.sets);
       title.textContent = `${e.exercise} · ${e.sets?.length || 0} sets${setSummary ? ' · ' + setSummary : ''}`;
+      if (isPR){
+        const pr = document.createElement('span');
+        pr.className = 'pr-badge';
+        pr.textContent = 'PR';
+        title.prepend(pr);
+      }
 
       const meta = document.createElement('div');
       meta.className = 'entry-meta';
       const time = new Date(e.timestamp || selectedISO);
-      meta.textContent = time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const kcal = estimateEntryCalories(e);
+      meta.textContent = time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ` • ~${kcal} kcal`;
 
       top.appendChild(title);
       top.appendChild(meta);
@@ -286,6 +324,9 @@
         setCount.value = e.sets?.length || 3;
         buildSetRows(setCount.value, e.sets);
         notes.value = e.notes ?? '';
+        intensity.value = e.intensity || 6;
+        setTime.value = e.setTime || 45;
+        restTime.value = e.restTime || 90;
         exercise.focus();
       });
 
@@ -298,6 +339,7 @@
             setEntries(selectedISO, arr);
             renderEntries();
             renderCalendar();
+            dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
           }
         }
       });
@@ -312,13 +354,7 @@
     });
     updateHistory();
     renderCalendar();
-  }
-
-  function summarizeSets(sets){
-    if (!Array.isArray(sets) || sets.length === 0) return '';
-    const reps = sets.map(s => s.reps ?? '?').join('/');
-    const wts = sets.map(s => (s.weight===''||s.weight==null)?'–':s.weight).join('/');
-    return `${reps} reps @ ${wts} kg`;
+    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
   }
 
   addEntryBtn.addEventListener('click', ()=>{
@@ -328,9 +364,12 @@
     setCount.value = 3;
     buildSetRows(3);
     notes.value = '';
+    intensity.value = 6;
+    setTime.value = 45;
+    restTime.value = 90;
     exercise.focus();
   });
-  document.getElementById('cancelEntryBtn').addEventListener('click', ()=>{
+  $('#cancelEntryBtn').addEventListener('click', ()=>{
     entryForm.hidden = true;
   });
 
@@ -355,7 +394,11 @@
     const all = getEntries(selectedISO);
     const id = entryIdInput.value || uuid();
     const now = new Date();
-    const record = { id, exercise: ex, sets: setsData, notes: notes.value.trim(), timestamp: now.toISOString() };
+    const record = {
+      id, exercise: ex, sets: setsData, notes: notes.value.trim(),
+      intensity: Number(intensity.value), setTime: Number(setTime.value), restTime: Number(restTime.value),
+      timestamp: now.toISOString()
+    };
 
     const idx = all.findIndex(x => x.id === id);
     if(idx >= 0){ all[idx] = record; } else { all.push(record); }
@@ -363,6 +406,7 @@
     entryForm.hidden = true;
     renderEntries();
     renderCalendar();
+    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
   });
 
   dayTypeSelect.addEventListener('change', () => {
@@ -380,7 +424,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'workout-data-v2.json';
+    a.download = 'workout-data-v3.json';
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -414,6 +458,7 @@
       renderEntries();
       dayTypeChip.textContent='';
       dayTypeSelect.value='';
+      dayCaloriesEl.textContent = '0 kcal';
     }
   });
 
@@ -432,20 +477,39 @@
       const li = document.createElement('li');
       li.className = 'hist-item';
       const dateStr = new Date(i.dateISO).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric'});
-      const top = document.createElement('div');
-      top.innerHTML = `<strong>${i.exercise}</strong> — ${i.sets?.length || 0} sets ${i.sets ? '('+ (i.sets.map(s=>s.reps).join('/')) +' reps)' : ''}`;
-      const small = document.createElement('div');
-      small.className = 'small';
-      small.textContent = `${dateStr}${i.notes ? ' • '+i.notes : ''}`;
-      li.appendChild(top);
-      li.appendChild(small);
+      const setStr = i.sets ? '('+ (i.sets.map(s=>s.reps).join('/')) +' reps)' : '';
+      const kcal = estimateEntryCalories(i);
+      li.innerHTML = `<div><strong>${i.exercise}</strong> — ${i.sets?.length || 0} sets ${setStr} • ~${kcal} kcal</div><div class="small">${dateStr}${i.notes ? ' • '+i.notes : ''}</div>`;
       historyList.appendChild(li);
     });
   }
   historyRefreshBtn.addEventListener('click', updateHistory);
   historyQuery.addEventListener('input', updateHistory);
 
+  // Settings & Theme
+  settingsBtn.addEventListener('click', ()=> settingsDialog.showModal());
+  saveSettings.addEventListener('click', (e)=>{
+    e.preventDefault();
+    const prefs = loadPrefs();
+    prefs.bodyWeight = Number(bodyWeight.value || 80);
+    savePrefs(prefs);
+    settingsDialog.close();
+    renderEntries();
+    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
+  });
+  closeSettings.addEventListener('click', (e)=>{
+    e.preventDefault();
+    settingsDialog.close();
+  });
+  themeSelect.addEventListener('change', ()=>{
+    const prefs = loadPrefs();
+    prefs.theme = themeSelect.value;
+    savePrefs(prefs);
+    applyTheme();
+  });
+
   function init(){
+    applyTheme();
     monthLabel.textContent = fmtMonthYear(view);
     renderCalendar();
     selectDate(selectedISO);
