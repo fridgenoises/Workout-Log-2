@@ -1,1 +1,111 @@
-<!doctype html><html><head><meta charset='utf-8'><title>Workout Log v2</title></head><body><h1>Workout Log PWA v2</h1><p>This is the re-uploaded placeholder. (Actual full code was in previous step)</p></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Workout Log">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <title>Workout Calendar — Sets & Reps Log</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Workout Calendar</h1>
+    <div class="header-actions">
+      <button id="exportBtn" title="Export all data as JSON">Export</button>
+      <label class="import-label" title="Import data from a JSON file">
+        Import <input type="file" id="importInput" accept="application/json" />
+      </label>
+      <button id="clearAllBtn" class="danger" title="Delete ALL data (cannot be undone)">Clear all</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="calendar">
+      <div class="calendar-nav">
+        <button id="prevMonth" aria-label="Previous month">‹</button>
+        <h2 id="monthLabel" aria-live="polite"></h2>
+        <button id="nextMonth" aria-label="Next month">›</button>
+      </div>
+      <div class="weekday-row" aria-hidden="true">
+        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+      </div>
+      <div id="calendarGrid" class="calendar-grid" role="grid" aria-label="Workout calendar"></div>
+    </section>
+
+    <section class="entry-panel" aria-labelledby="panelTitle">
+      <div class="panel-head">
+        <h2 id="panelTitle">Entries for <span id="selectedDateLabel"></span> <span id="dayTypeChip" class="chip"></span></h2>
+        <button id="addEntryBtn" class="primary">+ Add Entry</button>
+      </div>
+
+      <div class="form-row">
+        <label>Day type
+          <select id="dayTypeSelect">
+            <option value="">— Select —</option>
+            <option value="Chest and Back">Chest and Back</option>
+            <option value="SARMS">SARMS</option>
+            <option value="Legs">Legs</option>
+          </select>
+        </label>
+      </div>
+
+      <form id="entryForm" class="entry-form" hidden>
+        <input type="hidden" id="entryId" />
+        <div class="form-row">
+          <label>Exercise
+            <input id="exercise" type="text" required placeholder="e.g., Bench Press" />
+          </label>
+        </div>
+
+        <div class="form-row grid-2">
+          <label>Number of sets
+            <input id="setCount" type="number" min="1" step="1" value="3" />
+          </label>
+          <div class="hint">Sets will generate rows for reps & weight</div>
+        </div>
+
+        <div id="setRows" class="set-rows"></div>
+
+        <div class="form-row">
+          <label>Notes
+            <textarea id="notes" rows="2" placeholder="How it felt, form cues, etc."></textarea>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="primary" id="saveEntryBtn">Save</button>
+          <button type="button" id="cancelEntryBtn">Cancel</button>
+        </div>
+      </form>
+
+      <ul id="entriesList" class="entries-list" aria-live="polite"></ul>
+    </section>
+
+    <aside class="history-panel" aria-labelledby="historyTitle">
+      <h2 id="historyTitle">History</h2>
+      <div class="history-controls">
+        <input id="historyQuery" type="search" placeholder="Filter by exercise (e.g., Squat)" />
+        <button id="historyRefreshBtn">Refresh</button>
+      </div>
+      <ul id="historyList" class="history-list"></ul>
+    </aside>
+  </main>
+
+  <footer class="app-footer">
+    <p><strong>Tip:</strong> Log right after your working set. Consistency beats perfection. 💪</p>
+  </footer>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+      });
+    }
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
