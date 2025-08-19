@@ -1,0 +1,1 @@
+console.log('Workout Log PWA v2 placeholder loaded');
