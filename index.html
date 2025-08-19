@@ -2,138 +2,130 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Workout Log">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <title>Workout Calendar — Sets & Reps Log</title>
+  <title>Workout Log</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>Workout Calendar</h1>
-    <div class="header-actions">
-      <select id="themeSelect" title="Theme">
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-        <option value="high-contrast">High Contrast</option>
-      </select>
-      <button id="settingsBtn" title="Settings">Settings</button>
-      <button id="exportBtn" title="Export all data as JSON">Export</button>
-      <label class="import-label" title="Import data from a JSON file">
-        Import <input type="file" id="importInput" accept="application/json" />
-      </label>
-      <button id="clearAllBtn" class="danger" title="Delete ALL data (cannot be undone)">Clear all</button>
+  <header class="topbar">
+    <button id="prevMonth" aria-label="Previous month" class="icon-btn">‹</button>
+    <div class="topbar-title">
+      <div id="monthLabel"></div>
+      <div id="selectedDateLabel" class="sub"></div>
+    </div>
+    <div class="topbar-actions">
+      <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙️</button>
+      <button id="moreBtn" class="icon-btn" aria-label="More">⋯</button>
+      <div id="moreMenu" class="menu" hidden>
+        <button id="exportBtn">Export</button>
+        <label class="import-label">Import <input type="file" id="importInput" accept="application/json" /></label>
+        <button id="clearAllBtn" class="danger">Clear all</button>
+      </div>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="calendar">
-      <div class="calendar-nav">
-        <button id="prevMonth" aria-label="Previous month">‹</button>
-        <h2 id="monthLabel" aria-live="polite"></h2>
-        <button id="nextMonth" aria-label="Next month">›</button>
-      </div>
-      <div class="weekday-row" aria-hidden="true">
-        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
-      </div>
-      <div id="calendarGrid" class="calendar-grid" role="grid" aria-label="Workout calendar"></div>
+  <main class="content">
+    <section class="calendar" aria-label="Workout calendar">
+      <div id="calendarGrid" class="calendar-grid"></div>
     </section>
 
-    <section class="entry-panel" aria-labelledby="panelTitle">
-      <div class="panel-head">
-        <h2 id="panelTitle">Entries for <span id="selectedDateLabel"></span> <span id="dayTypeChip" class="chip"></span></h2>
-        <div class="right">
-          <span id="dayCalories" class="chip muted" title="Estimated calories for this day">0 kcal</span>
-          <button id="addEntryBtn" class="primary">+ Add Entry</button>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <label>Day type
-          <select id="dayTypeSelect">
-            <option value="">— Select —</option>
-            <option value="Chest and Back">Chest and Back</option>
+    <section class="entries" aria-label="Day entries">
+      <div class="daybar">
+        <div class="chips">
+          <select id="dayTypeSelect" class="chip-select" aria-label="Day type">
+            <option value="">Day type</option>
+            <option value="Chest and Back">Chest & Back</option>
             <option value="SARMS">SARMS</option>
             <option value="Legs">Legs</option>
           </select>
-        </label>
+          <span id="kcalChip" class="chip muted" title="Estimated calories for the day">0 kcal</span>
+          <span id="prChip" class="chip hidden">PRs today</span>
+        </div>
       </div>
 
-      <form id="entryForm" class="entry-form" hidden>
-        <input type="hidden" id="entryId" />
-        <div class="form-row">
-          <label>Exercise
-            <input id="exercise" type="text" required placeholder="e.g., Bench Press" />
-          </label>
-        </div>
+      <ul id="entriesList" class="entries-list" aria-live="polite"></ul>
+    </section>
+  </main>
 
-        <div class="form-row grid-3">
-          <label>Intensity
+  <button id="addEntryBtn" class="fab" aria-label="Add entry">＋</button>
+
+  <!-- Entry Sheet -->
+  <div id="sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-body">
+      <div class="sheet-handle"></div>
+      <h2 id="sheetTitle">Log exercise</h2>
+      <form id="entryForm">
+        <input type="hidden" id="entryId" />
+        <label class="field">
+          <span>Exercise</span>
+          <input id="exercise" type="text" placeholder="e.g., Bench Press" required />
+        </label>
+
+        <div class="row">
+          <label class="field">
+            <span>Sets</span>
+            <input id="setCount" type="number" min="1" step="1" value="3" inputmode="numeric" />
+          </label>
+          <label class="field">
+            <span>Intensity</span>
             <select id="intensity">
-              <option value="6">Moderate (MET 6)</option>
-              <option value="8">Vigorous (MET 8)</option>
-              <option value="3.5">Light (MET 3.5)</option>
+              <option value="light">Light</option>
+              <option value="moderate" selected>Moderate</option>
+              <option value="vigorous">Vigorous</option>
             </select>
           </label>
-          <label>Set time (sec)
-            <input id="setTime" type="number" min="10" step="5" value="45" />
-          </label>
-          <label>Rest time (sec)
-            <input id="restTime" type="number" min="0" step="5" value="90" />
-          </label>
-        </div>
-
-        <div class="form-row grid-2">
-          <label>Number of sets
-            <input id="setCount" type="number" min="1" step="1" value="3" />
-          </label>
-          <div class="hint">Sets will generate rows for reps & weight</div>
         </div>
 
         <div id="setRows" class="set-rows"></div>
 
-        <div class="form-row">
-          <label>Notes
-            <textarea id="notes" rows="2" placeholder="How it felt, form cues, etc."></textarea>
-          </label>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="primary" id="saveEntryBtn">Save</button>
+        <label class="field">
+          <span>Notes</span>
+          <textarea id="notes" rows="2" placeholder="How it felt, cues, etc."></textarea>
+        </label>
+
+        <div class="actions">
           <button type="button" id="cancelEntryBtn">Cancel</button>
+          <button type="submit" class="primary">Save</button>
         </div>
       </form>
+    </div>
+  </div>
 
-      <ul id="entriesList" class="entries-list" aria-live="polite"></ul>
-    </section>
-
-    <aside class="history-panel" aria-labelledby="historyTitle">
-      <h2 id="historyTitle">History</h2>
-      <div class="history-controls">
-        <input id="historyQuery" type="search" placeholder="Filter by exercise (e.g., Squat)" />
-        <button id="historyRefreshBtn">Refresh</button>
-      </div>
-      <ul id="historyList" class="history-list"></ul>
-    </aside>
-  </main>
-
-  <footer class="app-footer">
-    <p><strong>Tip:</strong> Log right after your working set. Consistency beats perfection. 💪</p>
-  </footer>
-
-  <dialog id="settingsDialog">
-    <form method="dialog" class="settings">
-      <h3>Settings</h3>
-      <label>Body weight (kg)
-        <input id="bodyWeight" type="number" min="30" max="250" step="0.5" value="80" />
+  <!-- Settings Modal -->
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog" id="settingsForm">
+      <h2>Settings</h2>
+      <label class="field">
+        <span>Body weight (kg)</span>
+        <input id="weightKg" type="number" step="0.1" min="20" max="300" inputmode="decimal" />
       </label>
-      <p class="muted small">Used for calorie estimates (kcal = MET × 3.5 × weight(kg) ÷ 200 × minutes).</p>
-      <div class="form-actions">
-        <button id="saveSettings" class="primary">Save</button>
-        <button id="closeSettings">Close</button>
+      <div class="row">
+        <label class="field">
+          <span>Avg set time (sec)</span>
+          <input id="setTimeSec" type="number" min="10" step="5" value="40" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span>Avg rest (sec)</span>
+          <input id="restTimeSec" type="number" min="10" step="5" value="90" inputmode="numeric" />
+        </label>
+      </div>
+      <label class="field">
+        <span>Theme</span>
+        <select id="themeSelect">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="contrast">High contrast</option>
+        </select>
+      </label>
+      <div class="actions">
+        <button value="cancel">Close</button>
+        <button id="saveSettingsBtn" class="primary" value="default">Save</button>
       </div>
     </form>
   </dialog>

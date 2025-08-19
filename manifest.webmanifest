@@ -1,5 +1,5 @@
 {
-  "name": "Workout Calendar — Sets & Reps Log",
+  "name": "Workout Log — Minimal PWA",
   "short_name": "Workout Log",
   "start_url": "./index.html",
   "scope": "./",
