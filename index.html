@@ -21,12 +21,6 @@
     </div>
     <div class="actions">
       <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙️</button>
-      <button id="menuBtn" class="icon-btn" aria-label="Menu">⋯</button>
-      <div id="menu" class="menu" hidden>
-        <button id="exportBtn">Export</button>
-        <label class="import-label">Import <input type="file" id="importInput" accept="application/json" /></label>
-        <button id="clearAllBtn" class="danger">Clear all</button>
-      </div>
     </div>
   </header>
 
@@ -86,8 +80,8 @@
         </label>
 
         <div class="actions">
-          <button type="button" id="cancelBtn">Cancel</button>
-          <button type="submit" class="primary">Save</button>
+          <button type="button" id="cancelBtn" class="btn outline">Cancel</button>
+          <button type="submit" class="primary"><span class="ico">💾</span> Save</button>
         </div>
       </form>
     </div>
@@ -120,8 +114,8 @@
         </select>
       </label>
       <div class="actions">
-        <button value="cancel">Close</button>
-        <button id="savePrefs" class="primary" value="default">Save</button>
+        <button value="cancel" class="btn outline">Close</button>
+        <button id="savePrefs" class="primary"><span class="ico">💾</span> Save</button>
       </div>
     </form>
   </dialog>

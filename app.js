@@ -1,4 +1,4 @@
-// Workout Log v5 — mobile-first, robust
+// Workout Log v5.1 — icons + menu removal
 (function(){
   const $ = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -8,11 +8,6 @@
   const selectedDateLabel = $('#selectedDateLabel');
   const weekList = $('#weekList');
   const prevWeekBtn = $('#prevWeek');
-  const menuBtn = $('#menuBtn');
-  const menu = $('#menu');
-  const exportBtn = $('#exportBtn');
-  const importInput = $('#importInput');
-  const clearAllBtn = $('#clearAllBtn');
   const settingsBtn = $('#settingsBtn');
   const settingsDlg = $('#settings');
   const settingsForm = $('#settingsForm');
@@ -47,50 +42,24 @@
   function savePrefs(p){ localStorage.setItem(PREF_KEY, JSON.stringify(p)); }
   function applyTheme(t){ document.documentElement.setAttribute('data-theme', t || 'dark'); }
 
-  // Data (v3) with migration
+  // Data (v3)
   const KEY = 'workout_log_v3';
   function loadAll(){
     const raw = localStorage.getItem(KEY);
     if (raw) { try { return JSON.parse(raw) || {}; } catch(e){ return {}; } }
-    // migrate from v2 or v1
-    let migrated = {};
-    for (const old of ['workout_log_v2','workout_log_v1']) {
-      try {
-        const o = JSON.parse(localStorage.getItem(old) || 'null');
-        if (o && typeof o === 'object') {
-          Object.entries(o).forEach(([date, day]) => {
-            if (Array.isArray(day)) migrated[date] = { dayType: null, entries: normalizeEntries(day) };
-            else migrated[date] = { dayType: day.dayType || null, entries: normalizeEntries(day.entries || []) };
-          });
-          break;
-        }
-      } catch(e){}
-    }
-    saveAll(migrated); return migrated;
+    return {};
   }
   function saveAll(data){ localStorage.setItem(KEY, JSON.stringify(data)); }
   function normalizeEntries(arr){
-    return (arr || []).map(e => {
-      let sets = e.sets;
-      if (!Array.isArray(sets)) {
-        const count = Math.max(1, Number(e.sets || 1));
-        const reps = Math.max(1, Number(e.reps || 1));
-        const weight = (e.weight===''||e.weight==null)?'':Number(e.weight);
-        sets = Array.from({length: count}, () => ({ reps, weight }));
-      } else {
-        sets = sets.map(s => ({ reps: Number(s.reps||1), weight: (s.weight===''||s.weight==null)?'':Number(s.weight) }));
-      }
-      return {
-        id: e.id || uuid(),
-        exercise: e.exercise,
-        sets,
-        intensity: e.intensity || 'moderate',
-        notes: e.notes || '',
-        timestamp: e.timestamp || new Date().toISOString()
-      };
-    });
+    return (arr || []).map(e => ({
+      id: e.id || uuid(),
+      exercise: e.exercise,
+      sets: Array.isArray(e.sets) ? e.sets.map(s=>({reps:Number(s.reps||1), weight:(s.weight===''||s.weight==null)?'':Number(s.weight)})) : [{reps:Number(e.reps||1), weight:(e.weight===''||e.weight==null)?'':Number(e.weight)}],
+      intensity: e.intensity || 'moderate',
+      notes: e.notes || '',
+      timestamp: e.timestamp || new Date().toISOString()
+    }));
   }
-
   function getDay(iso){
     const all = loadAll();
     let day = all[iso];
@@ -108,7 +77,7 @@
   function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
   function startOfWeek(d){ const x=new Date(d); const dow=(x.getDay()+6)%7; return addDays(x,-dow); }
   function formatMonth(d){ return new Date(d).toLocaleString(undefined,{month:'long', year:'numeric'}); }
-  function formatLabel(iso){ return new Date(iso).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'}); }
+  function formatLabel(iso){ return new Date(iso).toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}); }
 
   // Calories
   const METS = { light: 3.5, moderate: 6.0, vigorous: 8.0 };
@@ -192,8 +161,8 @@
       details.textContent=`${reps} reps @ ${wts} kg · ${e.intensity}${e.notes?' · '+e.notes:''}`;
 
       const actions=document.createElement('div'); actions.className='entry-actions';
-      const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
-      const del=document.createElement('button'); del.className='btn danger'; del.textContent='Delete';
+      const edit=document.createElement('button'); edit.className='btn'; edit.innerHTML='<span class="ico">✏️</span> Edit';
+      const del=document.createElement('button'); del.className='btn danger'; del.innerHTML='<span class="ico">🗑</span> Delete';
       edit.addEventListener('click', ()=> openSheet(e));
       del.addEventListener('click', ()=>{
         if(confirm('Delete this entry?')){
@@ -275,25 +244,6 @@
     const p={ weightKg:Number(weightKgInput.value||75), setTimeSec:Number(setTimeSecInput.value||40), restTimeSec:Number(restTimeSecInput.value||90), theme: themeSelect.value||'dark' };
     savePrefs(p); applyTheme(p.theme); settingsDlg.close(); renderEntries();
   });
-
-  // Menu
-  menuBtn.addEventListener('click', ()=> menu.hidden = !menu.hidden);
-  document.addEventListener('click', (e)=>{ if(!menuBtn.contains(e.target) && !menu.contains(e.target)) menu.hidden=true; });
-
-  // Export / Import / Clear
-  exportBtn.addEventListener('click', ()=>{
-    const blob=new Blob([JSON.stringify(loadAll(), null, 2)], {type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='workout-data-v3.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  });
-  importInput.addEventListener('change', async (e)=>{
-    const file=e.target.files[0]; if(!file) return;
-    try {
-      const text=await file.text(); const data=JSON.parse(text);
-      if(typeof data!=='object' || Array.isArray(data)) throw new Error('Invalid format');
-      const cur=loadAll(); saveAll({...cur, ...data}); alert('Import successful.'); renderWeekStrip(viewAnchor); renderEntries();
-    } catch(err){ alert('Import failed: '+err.message); } finally { importInput.value=''; }
-  });
-  clearAllBtn.addEventListener('click', ()=>{ if(confirm('Delete ALL workout data?')){ localStorage.removeItem(KEY); renderWeekStrip(viewAnchor); renderEntries(); } });
 
   // Week navigation
   prevWeekBtn.addEventListener('click', ()=>{ viewAnchor = addDays(viewAnchor, -7); renderWeekStrip(viewAnchor); });

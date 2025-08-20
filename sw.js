@@ -1,5 +1,5 @@
-// v5 cache
-const CACHE_NAME = 'workout-log-cache-v5';
+// v5.1 cache
+const CACHE_NAME = 'workout-log-cache-v5-1';
 const ASSETS = [
   './',
   './index.html',

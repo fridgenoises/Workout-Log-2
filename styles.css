@@ -1,4 +1,4 @@
-/* v5 — mobile-first, robust + minimal */
+/* v5.1 — mobile-first, fixes: icons on save/delete, visible cancel, removed export/import/clear */
 :root {
   --bg: #0b0c10;
   --panel: #0f1218;
@@ -52,9 +52,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .title { text-align: center; }
 .title #monthLabel { font-weight: 800; }
 .title .sub { color: var(--muted); font-size: .9rem; }
-.actions { position: relative; }
-.menu { position: absolute; right: 0; top: 2.6rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: .2rem; padding: .4rem; }
-.menu button, .menu .import-label { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: .7rem .9rem; }
 
 .weekstrip { padding: .4rem .4rem .1rem; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 3.4rem; z-index: 45; }
 .week-list { list-style: none; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 0; padding: 0 .35rem .35rem; }
@@ -85,8 +82,12 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .badge.pr { color: var(--panel); background: var(--accent-2); border-color: transparent; }
 
 .entry-actions { display: flex; gap: .4rem; }
-.btn { border: 1px solid var(--border); background: var(--panel-2); border-radius: 10px; padding: .45rem .7rem; }
+.btn { border: 1px solid var(--border); background: var(--panel-2); border-radius: 10px; padding: .5rem .8rem; display: inline-flex; align-items: center; gap: .4rem; }
+.btn .ico { font-size: 1rem; }
 .btn.danger { background: #2a1414; border-color: #4a1818; color: #ffdcdc; }
+
+.primary { background: var(--accent); color: white; border: none; border-radius: 10px; padding: .6rem 1rem; display: inline-flex; align-items: center; gap: .5rem; }
+.btn.outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
 
 .fab { position: fixed; right: 16px; bottom: 16px; z-index: 60; width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: white; border: none; font-size: 1.8rem; box-shadow: var(--shadow); }
 
@@ -103,10 +104,8 @@ input, textarea, select { background: var(--panel); color: var(--text); border: 
 .set-row .idx { color: var(--muted); width: 56px; text-align: center; }
 
 .actions { display: flex; gap: .6rem; justify-content: flex-end; margin-top: .6rem; }
-button.primary { background: var(--accent); color: #fff; border: none; }
 
 .dialog { border: 1px solid var(--border); border-radius: 12px; padding: .8rem; background: var(--panel); color: var(--text); }
 .dialog::backdrop { background: rgba(0,0,0,.4); }
 
-.danger { color: #fff; background: var(--danger); border: none; }
 .import-label input { display: none; }
