@@ -1,519 +1,304 @@
-// Workout Calendar — PWA v3 (Themes + Calories + PR highlighting)
+// Workout Log v5 — mobile-first, robust
 (function(){
-  const $ = (sel, root=document) => root.querySelector(sel);
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 
   // Elements
   const monthLabel = $('#monthLabel');
-  const grid = $('#calendarGrid');
   const selectedDateLabel = $('#selectedDateLabel');
-  const dayTypeChip = $('#dayTypeChip');
-  const dayTypeSelect = $('#dayTypeSelect');
-  const entriesList = $('#entriesList');
-  const addEntryBtn = $('#addEntryBtn');
-  const entryForm = $('#entryForm');
-  const exercise = $('#exercise');
-  const setCount = $('#setCount');
-  const setRows = $('#setRows');
-  const notes = $('#notes');
-  const entryIdInput = $('#entryId');
-  const prevMonthBtn = $('#prevMonth');
-  const nextMonthBtn = $('#nextMonth');
+  const weekList = $('#weekList');
+  const prevWeekBtn = $('#prevWeek');
+  const menuBtn = $('#menuBtn');
+  const menu = $('#menu');
   const exportBtn = $('#exportBtn');
   const importInput = $('#importInput');
   const clearAllBtn = $('#clearAllBtn');
-  const historyQuery = $('#historyQuery');
-  const historyRefreshBtn = $('#historyRefreshBtn');
-  const historyList = $('#historyList');
-  const intensity = $('#intensity');
-  const setTime = $('#setTime');
-  const restTime = $('#restTime');
   const settingsBtn = $('#settingsBtn');
-  const settingsDialog = $('#settingsDialog');
-  const bodyWeight = $('#bodyWeight');
-  const saveSettings = $('#saveSettings');
-  const closeSettings = $('#closeSettings');
-  const dayCaloriesEl = $('#dayCalories');
-  const themeSelect = $('#themeSelect');
+  const settingsDlg = $('#settings');
+  const settingsForm = $('#settingsForm');
+  const themeSelect = $('#theme');
+  const weightKgInput = $('#weightKg');
+  const setTimeSecInput = $('#setTimeSec');
+  const restTimeSecInput = $('#restTimeSec');
+  const dayTypeSelect = $('#dayTypeSelect');
+  const kcalChip = $('#kcalChip');
+  const prChip = $('#prChip');
+  const entriesList = $('#entriesList');
+  const addBtn = $('#addBtn');
 
-  function uuid(){
-    if (window.crypto && 'randomUUID' in window.crypto) return window.crypto.randomUUID();
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
+  // Sheet
+  const sheet = $('#sheet');
+  const entryForm = $('#entryForm');
+  const entryId = $('#entryId');
+  const exercise = $('#exercise');
+  const setCount = $('#setCount');
+  const intensity = $('#intensity');
+  const setRows = $('#setRows');
+  const notes = $('#notes');
+  const cancelBtn = $('#cancelBtn');
 
-  let view = new Date();
-  view.setDate(1);
+  // Date state
+  let viewAnchor = new Date(); viewAnchor.setHours(0,0,0,0);
   let selectedISO = toISO(new Date());
 
-  function toISO(d){
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,'0');
-    const day = String(d.getDate()).padStart(2,'0');
-    return `${y}-${m}-${day}`;
-  }
-  function fromISO(s){
-    const [y,m,d] = s.split('-').map(Number);
-    return new Date(y, m-1, d);
-  }
-  function startOfWeek(d){
-    const date = new Date(d);
-    const day = (date.getDay()+6)%7;
-    date.setDate(date.getDate()-day);
-    date.setHours(0,0,0,0);
-    return date;
-  }
-  function endOfWeek(d){
-    const s = startOfWeek(d);
-    const e = new Date(s);
-    e.setDate(s.getDate()+6);
-    e.setHours(23,59,59,999);
-    return e;
-  }
-  function getMonthMatrix(year, month){
-    const first = new Date(year, month, 1);
-    const last = new Date(year, month+1, 0);
-    const start = startOfWeek(first);
-    const end = endOfWeek(last);
-    const days = [];
-    for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
-      days.push(new Date(d));
-    }
-    return days;
-  }
-  function fmtMonthYear(d){
-    return d.toLocaleString(undefined, { month:'long', year:'numeric' });
-  }
+  // Prefs
+  const PREF_KEY = 'workout_prefs_v1';
+  function loadPrefs(){ try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch(e){ return {}; } }
+  function savePrefs(p){ localStorage.setItem(PREF_KEY, JSON.stringify(p)); }
+  function applyTheme(t){ document.documentElement.setAttribute('data-theme', t || 'dark'); }
 
+  // Data (v3) with migration
   const KEY = 'workout_log_v3';
-  const PREFS = 'workout_prefs_v1';
-
-  function loadPrefs(){
-    try { return JSON.parse(localStorage.getItem(PREFS) || '{}'); } catch(e){ return {}; }
-  }
-  function savePrefs(p){ localStorage.setItem(PREFS, JSON.stringify(p)); }
-
-  function applyTheme(){
-    const prefs = loadPrefs();
-    const theme = prefs.theme || 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
-    themeSelect.value = theme;
-    if (prefs.bodyWeight) bodyWeight.value = prefs.bodyWeight;
-  }
-
   function loadAll(){
-    const v = localStorage.getItem(KEY);
-    if (v) { try { return JSON.parse(v)||{}; } catch(e){ return {}; } }
-    // migrate older keys
-    const v2 = localStorage.getItem('workout_log_v2');
-    if (v2) { try { const d = JSON.parse(v2)||{}; saveAll(d); return d; } catch(e){} }
-    const v1 = localStorage.getItem('workout_log_v1');
-    if (v1) { try { const d = JSON.parse(v1)||{}; saveAll(d); return d; } catch(e){} }
-    return {};
+    const raw = localStorage.getItem(KEY);
+    if (raw) { try { return JSON.parse(raw) || {}; } catch(e){ return {}; } }
+    // migrate from v2 or v1
+    let migrated = {};
+    for (const old of ['workout_log_v2','workout_log_v1']) {
+      try {
+        const o = JSON.parse(localStorage.getItem(old) || 'null');
+        if (o && typeof o === 'object') {
+          Object.entries(o).forEach(([date, day]) => {
+            if (Array.isArray(day)) migrated[date] = { dayType: null, entries: normalizeEntries(day) };
+            else migrated[date] = { dayType: day.dayType || null, entries: normalizeEntries(day.entries || []) };
+          });
+          break;
+        }
+      } catch(e){}
+    }
+    saveAll(migrated); return migrated;
   }
   function saveAll(data){ localStorage.setItem(KEY, JSON.stringify(data)); }
-  function getDayData(dateISO){
-    const data = loadAll();
-    let day = data[dateISO];
-    if (!day) day = { dayType: null, entries: [] };
-    if (Array.isArray(day)) day = { dayType: null, entries: day };
-    let mutated = false;
-    day.entries = (day.entries||[]).map(e => {
-      if (!e.id) { e.id = uuid(); mutated = true; }
-      if (!Array.isArray(e.sets)) {
+  function normalizeEntries(arr){
+    return (arr || []).map(e => {
+      let sets = e.sets;
+      if (!Array.isArray(sets)) {
         const count = Math.max(1, Number(e.sets || 1));
         const reps = Math.max(1, Number(e.reps || 1));
-        const weight = (e.weight === '' || e.weight == null) ? '' : Number(e.weight);
-        e.sets = Array.from({length: count}, () => ({ reps, weight }));
-        mutated = true;
+        const weight = (e.weight===''||e.weight==null)?'':Number(e.weight);
+        sets = Array.from({length: count}, () => ({ reps, weight }));
+      } else {
+        sets = sets.map(s => ({ reps: Number(s.reps||1), weight: (s.weight===''||s.weight==null)?'':Number(s.weight) }));
       }
-      if (!e.intensity) e.intensity = 6;
-      if (!e.setTime) e.setTime = 45;
-      if (!e.restTime) e.restTime = 90;
-      return e;
+      return {
+        id: e.id || uuid(),
+        exercise: e.exercise,
+        sets,
+        intensity: e.intensity || 'moderate',
+        notes: e.notes || '',
+        timestamp: e.timestamp || new Date().toISOString()
+      };
     });
-    if (mutated){ const all = loadAll(); all[dateISO] = day; saveAll(all); }
+  }
+
+  function getDay(iso){
+    const all = loadAll();
+    let day = all[iso];
+    if (!day) day = { dayType: null, entries: [] };
+    day.entries = normalizeEntries(day.entries);
+    const all2 = loadAll(); all2[iso] = day; saveAll(all2);
     return day;
   }
-  function setDayData(dateISO, day){ const all = loadAll(); all[dateISO] = day; saveAll(all); }
-  function getEntries(dateISO){ return getDayData(dateISO).entries; }
-  function setEntries(dateISO, arr){ const d = getDayData(dateISO); d.entries = arr; setDayData(dateISO, d); }
-  function getDayType(dateISO){ return getDayData(dateISO).dayType; }
-  function setDayType(dateISO, type){ const d = getDayData(dateISO); d.dayType = type||null; setDayData(dateISO, d); }
-  function hasEntries(dateISO){ const d = getDayData(dateISO); return Array.isArray(d.entries)&&d.entries.length>0; }
+  function setDay(iso, day){ const all = loadAll(); all[iso] = day; saveAll(all); }
 
-  function epley1RM(weight, reps){
-    if (weight === '' || weight == null || reps == null) return null;
-    return Number(weight) * (1 + Number(reps)/30);
+  // Utils
+  function uuid(){ if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
+  function toISO(d){ const dt = new Date(d); dt.setHours(0,0,0,0); return dt.toISOString().slice(0,10); }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function startOfWeek(d){ const x=new Date(d); const dow=(x.getDay()+6)%7; return addDays(x,-dow); }
+  function formatMonth(d){ return new Date(d).toLocaleString(undefined,{month:'long', year:'numeric'}); }
+  function formatLabel(iso){ return new Date(iso).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'}); }
+
+  // Calories
+  const METS = { light: 3.5, moderate: 6.0, vigorous: 8.0 };
+  function kcalForEntry(e, prefs){
+    const bw = Number(prefs.weightKg || 75);
+    const setSec = Number(prefs.setTimeSec || 40);
+    const restSec = Number(prefs.restTimeSec || 90);
+    const sets = e.sets?.length || 1;
+    const minutes = sets * (setSec + restSec) / 60;
+    const met = METS[e.intensity || 'moderate'] || METS.moderate;
+    return Math.round(met * 3.5 * bw / 200 * minutes);
   }
-  function best1RMForExercise(name){
-    const data = loadAll();
-    let best = 0;
-    Object.values(data).forEach(day => {
-      const arr = (day && day.entries) ? day.entries : Array.isArray(day) ? day : [];
-      arr.forEach(e => {
-        if ((e.exercise||'').toLowerCase() === (name||'').toLowerCase()){
-          (e.sets||[]).forEach(s => {
-            const est = epley1RM(s.weight, s.reps);
-            if (est && est > best) best = est;
-          });
+
+  // PR (Epley)
+  function epley1RM(w, r){ if (w===''||w==null) return 0; return Number(w) * (1 + Number(r)/30); }
+  function best1RM(exName, excludeISO, excludeId){
+    const all = loadAll(); let best = 0;
+    Object.entries(all).forEach(([date, day]) => {
+      const entries = day.entries || [];
+      entries.forEach(e => {
+        if ((e.exercise||'').toLowerCase() === (exName||'').toLowerCase()){
+          if (date===excludeISO && e.id===excludeId) return;
+          e.sets.forEach(s => { best = Math.max(best, epley1RM(s.weight, s.reps)); });
         }
       });
     });
     return best;
   }
-  function estimateEntryCalories(entry){
-    const prefs = loadPrefs();
-    const weightKg = Number(prefs.bodyWeight || 80);
-    const minutes = ((Number(entry.setTime)||45) + (Number(entry.restTime)||90)) * (entry.sets?.length||1) / 60;
-    const MET = Number(entry.intensity || 6);
-    const kcal = MET * 3.5 * weightKg / 200 * minutes;
-    return Math.round(kcal);
-  }
-  function estimateDayCalories(dateISO){
-    return getEntries(dateISO).reduce((s,e)=> s + estimateEntryCalories(e), 0);
-  }
 
-  function renderCalendar(){
-    monthLabel.textContent = fmtMonthYear(view);
-    grid.innerHTML = '';
-    const days = getMonthMatrix(view.getFullYear(), view.getMonth());
-    const thisMonth = view.getMonth();
-    const todayISO = toISO(new Date());
-
-    days.forEach(d => {
-      const iso = toISO(d);
-      const cell = document.createElement('div');
-      cell.className = 'day' + (d.getMonth() !== thisMonth ? ' out' : '') + (iso === todayISO ? ' today' : '');
-      cell.setAttribute('role','gridcell');
-      cell.setAttribute('tabindex','0');
-      cell.setAttribute('aria-label', `Day ${d.getDate()} ${fmtMonthYear(d)}`);
-
-      const btn = document.createElement('button');
-      btn.addEventListener('click', () => selectDate(iso));
-      btn.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); selectDate(iso);} });
-
-      const num = document.createElement('div');
-      num.className = 'num';
-      num.textContent = d.getDate();
-      btn.appendChild(num);
-
-      if(hasEntries(iso)){
-        const badge = document.createElement('div');
-        const count = getEntries(iso).length;
-        badge.className = 'badge';
-        badge.textContent = count;
-        btn.appendChild(badge);
-      }
-
-      const dt = getDayType(iso);
-      if (dt) {
-        const tag = document.createElement('div');
-        tag.className = 'daytag';
-        tag.textContent = dt;
-        btn.appendChild(tag);
-      }
-
-      cell.appendChild(btn);
-      grid.appendChild(cell);
-    });
-  }
-
-  function selectDate(iso){
-    selectedISO = iso;
-    selectedDateLabel.textContent = new Date(iso).toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
-    const dt = getDayType(iso);
-    dayTypeChip.textContent = dt ? `• ${dt}` : '';
-    dayTypeSelect.value = dt || '';
-    renderEntries();
-    entryForm.hidden = true;
-    addEntryBtn.focus();
-    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
-    const d = fromISO(iso);
-    if(d.getMonth() !== view.getMonth() || d.getFullYear() !== view.getFullYear()){
-      view = new Date(d.getFullYear(), d.getMonth(), 1);
-      renderCalendar();
+  // Week strip
+  function renderWeekStrip(anchor){
+    weekList.innerHTML='';
+    const start = startOfWeek(anchor);
+    monthLabel.textContent = formatMonth(anchor);
+    for (let i=0;i<7;i++){
+      const d = addDays(start,i); const iso = toISO(d);
+      const li = document.createElement('li');
+      const btn = document.createElement('button'); btn.className='daybtn';
+      if (iso===selectedISO) btn.classList.add('active');
+      if (iso===toISO(new Date())) btn.classList.add('today');
+      const day = getDay(iso);
+      if (day.entries.length) btn.classList.add('has');
+      btn.innerHTML = `<div class="wd">${d.toLocaleString(undefined,{weekday:'short'})}</div><div class="dt">${d.getDate()}</div>`;
+      btn.addEventListener('click', ()=> selectDate(iso));
+      li.appendChild(btn); weekList.appendChild(li);
     }
+    selectedDateLabel.textContent = formatLabel(selectedISO);
   }
+
+  function selectDate(iso){ selectedISO = iso; renderWeekStrip(viewAnchor); renderEntries(); }
+
+  // Entries
+  function renderEntries(){
+    const prefs = loadPrefs(); const day = getDay(selectedISO);
+    entriesList.innerHTML=''; let totalKcal=0; let anyPR=false;
+
+    if (day.entries.length===0){
+      const li=document.createElement('li'); li.className='entry';
+      li.innerHTML='<div style="color:var(--muted)">No entries yet — tap ＋ to log.</div>';
+      entriesList.appendChild(li);
+    }
+
+    day.entries.forEach((e, idx)=>{
+      const li=document.createElement('li'); li.className='entry';
+      const prevBest=best1RM(e.exercise, selectedISO, e.id);
+      let setBest=0; e.sets.forEach(s=>{ setBest=Math.max(setBest, epley1RM(s.weight,s.reps)); });
+      const isPR=setBest>prevBest && setBest>0; anyPR = anyPR || isPR;
+      const kcal=kcalForEntry(e,prefs); totalKcal += kcal;
+
+      const top=document.createElement('div'); top.className='entry-top';
+      const title=document.createElement('div'); title.className='entry-title'; title.textContent=`${e.exercise} · ${e.sets.length} sets`;
+      const badges=document.createElement('div'); badges.className='badges';
+      const kcalB=document.createElement('span'); kcalB.className='badge'; kcalB.textContent=`~${kcal} kcal`; badges.appendChild(kcalB);
+      if(isPR){ const pr=document.createElement('span'); pr.className='badge pr'; pr.textContent='PR'; badges.appendChild(pr); }
+      top.appendChild(title); top.appendChild(badges);
+
+      const details=document.createElement('div');
+      const reps=e.sets.map(s=>s.reps).join('/');
+      const wts=e.sets.map(s=>(s.weight===''||s.weight==null)?'–':s.weight).join('/');
+      details.style.color='var(--muted)';
+      details.textContent=`${reps} reps @ ${wts} kg · ${e.intensity}${e.notes?' · '+e.notes:''}`;
+
+      const actions=document.createElement('div'); actions.className='entry-actions';
+      const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
+      const del=document.createElement('button'); del.className='btn danger'; del.textContent='Delete';
+      edit.addEventListener('click', ()=> openSheet(e));
+      del.addEventListener('click', ()=>{
+        if(confirm('Delete this entry?')){
+          const d=getDay(selectedISO); d.entries.splice(idx,1); setDay(selectedISO,d);
+          renderWeekStrip(viewAnchor); renderEntries();
+        }
+      });
+      actions.appendChild(edit); actions.appendChild(del);
+
+      li.appendChild(top); li.appendChild(details); li.appendChild(actions);
+      entriesList.appendChild(li);
+    });
+
+    kcalChip.textContent=`${totalKcal} kcal`;
+    prChip.classList.toggle('hidden', !anyPR);
+    dayTypeSelect.value = getDay(selectedISO).dayType || '';
+  }
+
+  // Day type
+  dayTypeSelect.addEventListener('change', ()=>{
+    const d=getDay(selectedISO); d.dayType = dayTypeSelect.value || null; setDay(selectedISO,d);
+    renderWeekStrip(viewAnchor);
+  });
+
+  // Sheet
+  function openSheet(e){
+    sheet.classList.add('open'); document.body.style.overflow='hidden';
+    if(e){
+      entryId.value=e.id; exercise.value=e.exercise; setCount.value=e.sets.length||3; intensity.value=e.intensity||'moderate';
+      buildSetRows(setCount.value, e.sets); notes.value=e.notes||'';
+    } else {
+      entryId.value=''; exercise.value=''; setCount.value=3; intensity.value='moderate'; buildSetRows(3,null); notes.value='';
+    }
+    setTimeout(()=> exercise.focus(), 0);
+  }
+  function closeSheet(){ sheet.classList.remove('open'); document.body.style.overflow=''; }
+  cancelBtn.addEventListener('click', closeSheet);
+  sheet.addEventListener('click', (ev)=>{ if(ev.target===sheet) closeSheet(); });
+  addBtn.addEventListener('click', ()=> openSheet(null));
 
   function buildSetRows(n, existing){
-    setRows.innerHTML = '';
-    const count = Math.max(1, Number(n||1));
-    for (let i=0;i<count;i++){
-      const row = document.createElement('div');
-      row.className = 'set-row';
-      row.innerHTML = `
+    setRows.innerHTML=''; const count=Math.max(1, Number(n||1));
+    for(let i=0;i<count;i++){
+      const row=document.createElement('div'); row.className='set-row';
+      row.innerHTML=`
         <div class="idx">Set ${i+1}</div>
-        <input type="number" class="reps" min="1" step="1" placeholder="Reps" value="${existing?.[i]?.reps ?? ''}"/>
-        <input type="number" class="weight" min="0" step="0.5" placeholder="Weight (kg)" value="${existing?.[i]?.weight ?? ''}"/>
+        <input type="number" class="reps" min="1" step="1" placeholder="Reps" inputmode="numeric" value="${existing?.[i]?.reps ?? ''}"/>
+        <input type="number" class="weight" min="0" step="0.5" placeholder="Weight (kg)" inputmode="decimal" value="${existing?.[i]?.weight ?? ''}"/>
       `;
       setRows.appendChild(row);
     }
   }
-  setCount.addEventListener('input', () => buildSetRows(setCount.value));
-
-  function summarizeSets(sets){
-    if (!Array.isArray(sets) || sets.length === 0) return '';
-    const reps = sets.map(s => s.reps ?? '?').join('/');
-    const wts = sets.map(s => (s.weight===''||s.weight==null)?'–':s.weight).join('/');
-    return `${reps} reps @ ${wts} kg`;
-  }
-
-  function renderEntries(){
-    const entries = getEntries(selectedISO).map((e, i) => ({...e, __index: i}));
-    entriesList.innerHTML = '';
-    if(entries.length === 0){
-      const li = document.createElement('li');
-      li.className = 'entry-item';
-      li.innerHTML = '<span class="entry-meta">No entries yet for this day. Log your first set! 💪</span>';
-      entriesList.appendChild(li);
-      updateHistory();
-      renderCalendar();
-      return;
-    }
-    entries.forEach(e => {
-      const li = document.createElement('li');
-      li.className = 'entry-item';
-      li.dataset.index = e.__index;
-
-      const top = document.createElement('div');
-      top.className = 'entry-top';
-
-      const title = document.createElement('div');
-      title.className = 'entry-title';
-
-      const best = best1RMForExercise(e.exercise);
-      let isPR = false;
-      (e.sets||[]).forEach(s => {
-        const est = epley1RM(s.weight, s.reps);
-        if (est && est > best) isPR = true;
-      });
-
-      const setSummary = summarizeSets(e.sets);
-      title.textContent = `${e.exercise} · ${e.sets?.length || 0} sets${setSummary ? ' · ' + setSummary : ''}`;
-      if (isPR){
-        const pr = document.createElement('span');
-        pr.className = 'pr-badge';
-        pr.textContent = 'PR';
-        title.prepend(pr);
-      }
-
-      const meta = document.createElement('div');
-      meta.className = 'entry-meta';
-      const time = new Date(e.timestamp || selectedISO);
-      const kcal = estimateEntryCalories(e);
-      meta.textContent = time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ` • ~${kcal} kcal`;
-
-      top.appendChild(title);
-      top.appendChild(meta);
-
-      const note = document.createElement('div');
-      if(e.notes){ note.className = 'entry-meta'; note.textContent = e.notes; }
-
-      const actions = document.createElement('div');
-      actions.className = 'entry-actions';
-
-      const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.type = 'button';
-      const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.className='danger'; delBtn.type = 'button';
-
-      editBtn.addEventListener('click', ()=>{
-        entryForm.hidden = false;
-        entryIdInput.value = e.id;
-        exercise.value = e.exercise;
-        setCount.value = e.sets?.length || 3;
-        buildSetRows(setCount.value, e.sets);
-        notes.value = e.notes ?? '';
-        intensity.value = e.intensity || 6;
-        setTime.value = e.setTime || 45;
-        restTime.value = e.restTime || 90;
-        exercise.focus();
-      });
-
-      delBtn.addEventListener('click', ()=>{
-        if(confirm('Delete this entry?')){
-          const arr = getEntries(selectedISO);
-          const idx = e.__index;
-          if (idx >= 0 && idx < arr.length){
-            arr.splice(idx, 1);
-            setEntries(selectedISO, arr);
-            renderEntries();
-            renderCalendar();
-            dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
-          }
-        }
-      });
-
-      actions.appendChild(editBtn);
-      actions.appendChild(delBtn);
-
-      li.appendChild(top);
-      if(e.notes) li.appendChild(note);
-      li.appendChild(actions);
-      entriesList.appendChild(li);
-    });
-    updateHistory();
-    renderCalendar();
-    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
-  }
-
-  addEntryBtn.addEventListener('click', ()=>{
-    entryForm.hidden = false;
-    entryIdInput.value = '';
-    exercise.value = '';
-    setCount.value = 3;
-    buildSetRows(3);
-    notes.value = '';
-    intensity.value = 6;
-    setTime.value = 45;
-    restTime.value = 90;
-    exercise.focus();
-  });
-  $('#cancelEntryBtn').addEventListener('click', ()=>{
-    entryForm.hidden = true;
-  });
+  setCount.addEventListener('input', ()=> buildSetRows(setCount.value));
 
   entryForm.addEventListener('submit', (ev)=>{
     ev.preventDefault();
-    const ex = exercise.value.trim();
-    const nSets = Math.max(1, Number(setCount.value || 1));
-    if(!ex){ alert('Please enter an exercise name.'); return; }
-
-    const setsData = [];
-    const rows = Array.from(setRows.querySelectorAll('.set-row'));
-    for (let i=0;i<Math.min(nSets, rows.length); i++){
-      const r = rows[i].querySelector('.reps').value;
-      const w = rows[i].querySelector('.weight').value;
-      const repsVal = Number(r);
-      if (isNaN(repsVal) || repsVal < 1) { alert('Please enter reps ≥ 1 for each set.'); return; }
-      const weightVal = (w === '' || w == null) ? '' : Number(w);
-      if (weightVal !== '' && isNaN(weightVal)) { alert('Weight must be a number.'); return; }
-      setsData.push({ reps: repsVal, weight: weightVal });
+    const ex=(exercise.value||'').trim(); if(!ex){ alert('Exercise required.'); return; }
+    const count=Math.max(1, Number(setCount.value||1)); const rows=$$('.set-row', entryForm); const sets=[];
+    for(let i=0;i<Math.min(count, rows.length); i++){
+      const r=rows[i].querySelector('.reps').value; const w=rows[i].querySelector('.weight').value;
+      const repsVal=Number(r); if(isNaN(repsVal)||repsVal<1){ alert('Reps must be ≥ 1.'); return; }
+      const weightVal=(w===''||w==null)?'':Number(w); if(weightVal!=='' && isNaN(weightVal)){ alert('Weight must be a number.'); return; }
+      sets.push({reps: repsVal, weight: weightVal});
     }
-
-    const all = getEntries(selectedISO);
-    const id = entryIdInput.value || uuid();
-    const now = new Date();
-    const record = {
-      id, exercise: ex, sets: setsData, notes: notes.value.trim(),
-      intensity: Number(intensity.value), setTime: Number(setTime.value), restTime: Number(restTime.value),
-      timestamp: now.toISOString()
-    };
-
-    const idx = all.findIndex(x => x.id === id);
-    if(idx >= 0){ all[idx] = record; } else { all.push(record); }
-    setEntries(selectedISO, all);
-    entryForm.hidden = true;
-    renderEntries();
-    renderCalendar();
-    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
+    const rec={ id: entryId.value || uuid(), exercise: ex, sets, intensity: intensity.value, notes: (notes.value||'').trim(), timestamp: new Date().toISOString() };
+    const d=getDay(selectedISO); const idx=d.entries.findIndex(x=>x.id===rec.id); if(idx>=0) d.entries[idx]=rec; else d.entries.push(rec);
+    setDay(selectedISO,d); closeSheet(); renderWeekStrip(viewAnchor); renderEntries();
   });
 
-  dayTypeSelect.addEventListener('change', () => {
-    const v = dayTypeSelect.value || null;
-    setDayType(selectedISO, v);
-    dayTypeChip.textContent = v ? `• ${v}` : '';
-    renderCalendar();
+  // Settings
+  const prefs=loadPrefs(); if(prefs.theme) applyTheme(prefs.theme);
+  if(prefs.weightKg) weightKgInput.value=prefs.weightKg;
+  if(prefs.setTimeSec) setTimeSecInput.value=prefs.setTimeSec;
+  if(prefs.restTimeSec) restTimeSecInput.value=prefs.restTimeSec;
+  if(prefs.theme) themeSelect.value=prefs.theme;
+  settingsBtn.addEventListener('click', ()=> settingsDlg.showModal());
+  $('#savePrefs').addEventListener('click', (e)=>{
+    e.preventDefault();
+    const p={ weightKg:Number(weightKgInput.value||75), setTimeSec:Number(setTimeSecInput.value||40), restTimeSec:Number(restTimeSecInput.value||90), theme: themeSelect.value||'dark' };
+    savePrefs(p); applyTheme(p.theme); settingsDlg.close(); renderEntries();
   });
 
-  prevMonthBtn.addEventListener('click', ()=>{ view.setMonth(view.getMonth()-1); renderCalendar(); });
-  nextMonthBtn.addEventListener('click', ()=>{ view.setMonth(view.getMonth()+1); renderCalendar(); });
+  // Menu
+  menuBtn.addEventListener('click', ()=> menu.hidden = !menu.hidden);
+  document.addEventListener('click', (e)=>{ if(!menuBtn.contains(e.target) && !menu.contains(e.target)) menu.hidden=true; });
 
+  // Export / Import / Clear
   exportBtn.addEventListener('click', ()=>{
-    const blob = new Blob([JSON.stringify(loadAll(), null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'workout-data-v3.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const blob=new Blob([JSON.stringify(loadAll(), null, 2)], {type:'application/json'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='workout-data-v3.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   });
-
   importInput.addEventListener('change', async (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    try{
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if(typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid format');
-      const current = loadAll();
-      const merged = { ...current, ...data };
-      saveAll(merged);
-      alert('Import successful.');
-      renderCalendar();
-      selectDate(selectedISO);
-    }catch(err){
-      alert('Import failed: ' + err.message);
-    }finally{
-      importInput.value = '';
-    }
+    const file=e.target.files[0]; if(!file) return;
+    try {
+      const text=await file.text(); const data=JSON.parse(text);
+      if(typeof data!=='object' || Array.isArray(data)) throw new Error('Invalid format');
+      const cur=loadAll(); saveAll({...cur, ...data}); alert('Import successful.'); renderWeekStrip(viewAnchor); renderEntries();
+    } catch(err){ alert('Import failed: '+err.message); } finally { importInput.value=''; }
   });
+  clearAllBtn.addEventListener('click', ()=>{ if(confirm('Delete ALL workout data?')){ localStorage.removeItem(KEY); renderWeekStrip(viewAnchor); renderEntries(); } });
 
-  clearAllBtn.addEventListener('click', ()=>{
-    if(confirm('This will delete ALL workout data for this PWA version. Proceed?')){
-      localStorage.removeItem(KEY);
-      renderCalendar();
-      renderEntries();
-      dayTypeChip.textContent='';
-      dayTypeSelect.value='';
-      dayCaloriesEl.textContent = '0 kcal';
-    }
-  });
+  // Week navigation
+  prevWeekBtn.addEventListener('click', ()=>{ viewAnchor = addDays(viewAnchor, -7); renderWeekStrip(viewAnchor); });
 
-  function updateHistory(){
-    const q = historyQuery.value.trim().toLowerCase();
-    const data = loadAll();
-    const items = [];
-    Object.entries(data).forEach(([dateISO, day])=>{
-      const arr = Array.isArray(day) ? day : (day.entries || []);
-      arr.forEach(e=> items.push({dateISO, ...e}));
-    });
-    items.sort((a,b)=> new Date(b.timestamp||b.dateISO) - new Date(a.timestamp||a.dateISO));
-    const filtered = q ? items.filter(i => (i.exercise||'').toLowerCase().includes(q)) : items;
-    historyList.innerHTML = '';
-    filtered.slice(0, 100).forEach(i=>{
-      const li = document.createElement('li');
-      li.className = 'hist-item';
-      const dateStr = new Date(i.dateISO).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric'});
-      const setStr = i.sets ? '('+ (i.sets.map(s=>s.reps).join('/')) +' reps)' : '';
-      const kcal = estimateEntryCalories(i);
-      li.innerHTML = `<div><strong>${i.exercise}</strong> — ${i.sets?.length || 0} sets ${setStr} • ~${kcal} kcal</div><div class="small">${dateStr}${i.notes ? ' • '+i.notes : ''}</div>`;
-      historyList.appendChild(li);
-    });
-  }
-  historyRefreshBtn.addEventListener('click', updateHistory);
-  historyQuery.addEventListener('input', updateHistory);
-
-  // Settings & Theme
-  settingsBtn.addEventListener('click', ()=> settingsDialog.showModal());
-  saveSettings.addEventListener('click', (e)=>{
-    e.preventDefault();
-    const prefs = loadPrefs();
-    prefs.bodyWeight = Number(bodyWeight.value || 80);
-    savePrefs(prefs);
-    settingsDialog.close();
-    renderEntries();
-    dayCaloriesEl.textContent = `${estimateDayCalories(selectedISO)} kcal`;
-  });
-  closeSettings.addEventListener('click', (e)=>{
-    e.preventDefault();
-    settingsDialog.close();
-  });
-  themeSelect.addEventListener('change', ()=>{
-    const prefs = loadPrefs();
-    prefs.theme = themeSelect.value;
-    savePrefs(prefs);
-    applyTheme();
-  });
-
-  function init(){
-    applyTheme();
-    monthLabel.textContent = fmtMonthYear(view);
-    renderCalendar();
-    selectDate(selectedISO);
-    updateHistory();
-  }
+  // Init
+  function init(){ viewAnchor=new Date(); viewAnchor.setHours(0,0,0,0); selectedISO=toISO(new Date()); renderWeekStrip(viewAnchor); renderEntries(); }
   init();
 })();
